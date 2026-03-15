@@ -1,0 +1,16 @@
+/vendor/
+/node_modules/
+
+/.phpunit.cache/
+/.phpunit.result.cache
+/coverage/
+
+/.idea/
+/.vscode/
+
+/.DS_Store
+
+/.antigravity/
+
+/composer.lock
+/package-lock.json

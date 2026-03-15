@@ -1,0 +1,53 @@
+{
+    "name": "hashtagcms/migration-tool",
+    "description": "A production-grade, asynchronous migration tool for HashtagCMS to migrate data, media, and templates between installations.",
+    "keywords": [
+        "laravel",
+        "hashtagcms",
+        "migration",
+        "cms",
+        "data-transfer",
+        "synchronization"
+    ],
+    "type": "library",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Marghoob Suleman",
+            "email": "marghoobsuleman@gmail.com"
+        }
+    ],
+    "autoload": {
+        "psr-4": {
+            "HashtagCms\\MigrationTool\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "HashtagCms\\MigrationTool\\Tests\\": "tests/"
+        }
+    },
+    "require": {
+        "php": "^8.2",
+        "illuminate/support": "^10.0|^11.0|^12.0",
+        "illuminate/database": "^10.0|^11.0|^12.0",
+        "illuminate/filesystem": "^10.0|^11.0|^12.0",
+        "hashtagcms/hashtagcms": "*"
+    },
+    "require-dev": {
+        "orchestra/testbench": "^10.0",
+        "phpunit/phpunit": "^11.0"
+    },
+    "scripts": {
+        "test": "phpunit"
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "HashtagCms\\MigrationTool\\MigrationToolServiceProvider"
+            ]
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}
