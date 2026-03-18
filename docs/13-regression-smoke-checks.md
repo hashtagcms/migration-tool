@@ -1,9 +1,11 @@
 # 13 — Regression Smoke Checks
 
-Use this checklist in your host Laravel application (the app that installs this package) to validate the two fixed bugs:
+Use this checklist in your host Laravel application (the app that installs this package) to validate key fixed regressions:
 
 1. Query builder clone behavior in page migration
 2. MariaDB PDO extension detection in pre-flight checks
+3. Finalization stability around 90% progress
+4. Access guard enforcement for non-Staff users
 
 ---
 
@@ -57,7 +59,31 @@ Expected:
 
 ---
 
-## D. Optional Log Validation
+## D. Finalization (90% Crash) Regression
+
+1. Run migration for a valid site and wait until validation phase (~90%).
+2. Confirm process proceeds to completion.
+
+Expected:
+- No crash related to cache command checks.
+- Job transitions to `completed` with `progress = 100`.
+
+---
+
+## E. Access Guard Regression (Staff Only)
+
+1. Access route as authenticated user with `user_type = Visitors`.
+2. Try any JSON endpoint (for example, pre-flight check).
+
+Expected:
+- HTTP `403`.
+- JSON body includes:
+  - `success: false`
+  - `message: Visitors are not allowed to access the migration tool.`
+
+---
+
+## F. Optional Log Validation
 
 Check migration logs table:
 
@@ -74,7 +100,7 @@ Expected:
 
 ---
 
-## E. Quick CLI Syntax Sanity (Package Workspace)
+## G. Quick CLI Syntax Sanity (Package Workspace)
 
 ```bash
 php -l src/Steps/SyncContentStep.php

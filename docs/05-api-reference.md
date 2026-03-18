@@ -1,6 +1,10 @@
 # 05 — API Reference
 
-All routes are registered under the prefix defined in `config/migration-tool.php` (default: `cms-migration`) and protected by the configured middleware group (default: `web`).
+All routes are registered under the prefix in `config/migration-tool.php` (default: `cms-migration`) and use configured middleware (default: `['web', 'auth']`).
+
+In addition, the controller enforces:
+- authenticated user with `user_type = Staff`
+- non-Staff users receive `403` with message: `Visitors are not allowed to access the migration tool.`
 
 ---
 
@@ -13,64 +17,60 @@ All routes are registered under the prefix defined in `config/migration-tool.php
 | `POST` | `/cms-migration/analyze` | `migration.analyze` | `analyze` |
 | `POST` | `/cms-migration/site-details` | `migration.site-details` | `getSiteDetails` |
 | `POST` | `/cms-migration/run-migration` | `migration.run-migration` | `runMigration` |
+| `POST` | `/cms-migration/migrate-templates` | `migration.migrate-templates` | `migrateTemplates` |
+| `POST` | `/cms-migration/check-requirements` | `migration.check-requirements` | `checkRequirements` |
 | `GET` | `/cms-migration/check-progress/{job_id}` | `migration.check-progress` | `checkProgress` |
+
+---
+
+## Access Errors
+
+### `403 Forbidden` (non-Staff)
+
+```json
+{
+  "success": false,
+  "message": "Visitors are not allowed to access the migration tool."
+}
+```
+
+### `400 Bad Request` (session missing source DB config)
+
+```json
+{
+  "message": "Source database connection not configured in session."
+}
+```
 
 ---
 
 ## `GET /cms-migration`
 
-Returns the Blade wizard view.
-
-**Response:** HTML page.
+Returns the Blade wizard UI.
 
 ---
 
 ## `POST /cms-migration/test-connection`
 
-Validates source database credentials and stores them in the session.
+Validates source connection payload, stores source DB config in session, tests PDO connectivity, and detects legacy schema mode.
 
-**Request Body:**
+**Request fields:**
+- `host` (required)
+- `port` (required, numeric)
+- `database` (required)
+- `username` (required)
+- `password` (nullable)
+- `prefix` (nullable)
+- `driver` (nullable, defaults to `mysql`)
 
-```json
-{
-  "host": "127.0.0.1",
-  "port": 3306,
-  "database": "source_db_name",
-  "username": "root",
-  "password": "secret",
-  "prefix": "",
-  "driver": "mysql"
-}
-```
-
-**Validation Rules:**
-
-| Field | Rule |
-|:------|:-----|
-| `host` | `required` |
-| `database` | `required` |
-| `username` | `required` |
-| `port` | `required|numeric` |
-| `password` | `nullable` |
-| `prefix` | `nullable|string` |
-| `driver` | `nullable|string` |
-
-**Success Response:**
+**Success response:**
 
 ```json
 {
   "success": true,
   "message": "Connection successful!",
-  "target": "https://app.com/cms-migration/analyze"
-}
-```
-
-**Error Response:**
-
-```json
-{
-  "success": false,
-  "message": "Connection failed: SQLSTATE[HY000] [2002] Connection refused"
+  "target": "https://app.test/cms-migration/analyze",
+  "legacy": true
 }
 ```
 
@@ -78,27 +78,28 @@ Validates source database credentials and stores them in the session.
 
 ## `POST /cms-migration/analyze`
 
-Re-hydrates the session connection and returns aggregate counts and site list from the source database.
+Uses source DB session config to return source summary and discovered sites.
 
-**Request Body:** None required (session is used).
-
-**Success Response:**
+**Success response shape:**
 
 ```json
 {
   "success": true,
   "summary": {
     "sites": 3,
-    "modules": 45,
+    "users": 50,
+    "roles": 5,
+    "modules": 20,
     "categories": 120,
-    "pages": 8,
+    "pages": 40,
     "themes": 2,
-    "static_modules": 200
+    "static_contents": 400,
+    "galleries": 15,
+    "site_props": 12,
+    "platforms": 4
   },
-  "sites_list": [
-    { "id": 1, "name": "Main Site", "domain": "example.com" },
-    { "id": 2, "name": "Blog", "domain": "blog.example.com" }
-  ]
+  "package_warnings": ["vendor/package-a"],
+  "sites_list": [{ "id": 1, "name": "Main", "domain": "example.com" }]
 }
 ```
 
@@ -106,62 +107,91 @@ Re-hydrates the session connection and returns aggregate counts and site list fr
 
 ## `POST /cms-migration/site-details`
 
-Returns detailed entity counts for a specific source site.
+Returns detailed counts for one source site.
 
-**Request Body:**
+**Request:**
 
 ```json
 { "site_id": 1 }
 ```
 
-**Success Response:**
+---
+
+## `POST /cms-migration/check-requirements`
+
+Runs pre-flight checks before migration.
+
+**Request:**
 
 ```json
 {
-  "success": true,
-  "details": {
-    "categories": 45,
-    "modules": 12,
-    "pages": 3,
-    "themes": 1,
-    "module_props": 28
-  }
+  "site_id": 1,
+  "copy_media": true,
+  "source_root_path": "/var/www/old-site"
 }
 ```
+
+**Response:**
+- `checks`: array of `{label,status,message,critical}`
+- `can_proceed`: bool
+- `critical_failure`: bool
 
 ---
 
 ## `POST /cms-migration/run-migration`
 
-Validates the request, creates a progress log entry, and dispatches `ProcessMigration` to the queue.
+Creates `cms_migration_logs` row and dispatches `ProcessMigration` job.
 
-**Request Body:**
+Before dispatch, the controller checks for package-managed tables missing in target DB:
+- if possible, it auto-creates them from source schema
+- if CREATE TABLE permission is missing, request is blocked with an explicit message and missing table list
+
+**Request:**
 
 ```json
 {
   "site_id": 1,
   "conflict_strategy": "rename",
   "copy_media": true,
-  "source_root_path": "/var/www/source-cms/public"
+  "source_root_path": "/var/www/old-site"
 }
 ```
 
-**Validation Rules:**
-
-| Field | Rule |
-|:------|:-----|
-| `site_id` | `required|numeric` |
-| `conflict_strategy` | `required|string|in:terminate,overwrite,rename` |
-| `copy_media` | `nullable|boolean` |
-| `source_root_path` | `nullable|string` |
-
-**Success Response:**
+**Success:**
 
 ```json
 {
   "success": true,
-  "job_id": "mig_67c5a1b2f43e8",
-  "message": "Migration started in background"
+  "job_id": "24192de0-d837-4ade-80d1-4129cb4d5123",
+  "message": "Migration started in background",
+  "auto_created_tables": ["recommendation"]
+}
+```
+
+When `migration-tool.auto_queue_work_once = true`, dispatch also auto-starts one queue worker process (`queue:work --once`).
+
+**Failure when table creation is not allowed:**
+
+```json
+{
+  "success": false,
+  "message": "Unable to create missing target tables due to insufficient CREATE TABLE permission. Please create these tables first in target database and then run this migration tool again: recommendation.",
+  "missing_tables": ["recommendation"]
+}
+```
+
+---
+
+## `POST /cms-migration/migrate-templates`
+
+Runs template migration independently from data migration.
+
+**Request:**
+
+```json
+{
+  "site_id": 1,
+  "source_root": "/absolute/path/to/source/laravel"
 }
 ```
 
@@ -169,23 +199,21 @@ Validates the request, creates a progress log entry, and dispatches `ProcessMigr
 
 ## `GET /cms-migration/check-progress/{job_id}`
 
-Returns the current status of a dispatched migration job.
+Returns live migration state from `cms_migration_logs`.
 
-**URL Parameters:** `job_id` — The unique ID returned by `run-migration`.
-
-**Response (running):**
+**Running example:**
 
 ```json
 {
   "success": true,
-  "status": "running: Glue Sync",
-  "progress": 75,
+  "status": "running: Validation",
+  "progress": 90,
   "message": null,
   "results": null
 }
 ```
 
-**Response (completed):**
+**Completed example:**
 
 ```json
 {
@@ -193,33 +221,18 @@ Returns the current status of a dispatched migration job.
   "status": "completed",
   "progress": 100,
   "message": null,
-  "results": {
-    "Context Synchronization": { "langs": "Matched 3 existing", ... },
-    "Structural Synchronization": { "site": "Created new site: example.com", ... },
-    "Glue Layer Synchronization": { "categories": "Synced categories for site ID: 42", ... },
-    "Content Synchronization": { "static_modules": "Synced translations for 15 modules" },
-    "Media & Assets Synchronization": { "assets": "Copied 142 files/folders" }
-  }
+  "results": { "...": "..." }
 }
 ```
 
-**Response (failed):**
+**Failed example:**
 
 ```json
 {
   "success": true,
   "status": "failed",
-  "progress": 50,
-  "message": "Site with domain example.com already exists. Use 'overwrite' or 'rename' strategy.",
+  "progress": 90,
+  "message": "Exact exception text",
   "results": null
-}
-```
-
-**Response (job not found):**
-
-```json
-{
-  "success": false,
-  "message": "Job not found"
 }
 ```

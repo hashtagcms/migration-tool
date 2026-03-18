@@ -6,7 +6,9 @@ The Migration Tool connects to external databases and writes significant amounts
 
 ## CSRF Protection
 
-All API endpoints are registered under the `web` middleware group, which includes Laravel's `VerifyCsrfToken` middleware.
+All API endpoints run under configured package middleware (default: `['web', 'auth']`).
+
+Because `web` middleware is enabled by default, Laravel `VerifyCsrfToken` applies to state-changing requests.
 
 The wizard injects the CSRF token into every Axios request at page load:
 
@@ -84,11 +86,11 @@ The `source_root_path` is not sanitized beyond PHP's native file system access c
 
 ---
 
-## Access Control Recommendations
+## Access Control
 
-By default, the wizard routes use only the `web` middleware. For production, restrict access:
+The package enforces access at two layers:
 
-**Option 1: Add `auth` middleware in config:**
+1. Route middleware (default config):
 
 ```php
 // config/migration-tool.php
@@ -98,13 +100,26 @@ return [
 ];
 ```
 
-**Option 2: Add an admin role check:**
+2. Controller-level guard:
+
+- Request user must have `user_type === 'Staff'`
+- Non-Staff requests return `403`
+- JSON requests receive:
+
+```json
+{
+    "success": false,
+    "message": "Visitors are not allowed to access the migration tool."
+}
+```
+
+You can still harden further with authorization middleware:
 
 ```php
 'middleware' => ['web', 'auth', 'can:manage-admin'],
 ```
 
-**Option 3: Use IP allowlisting at the web server level (Nginx):**
+Or with infrastructure controls such as IP allowlisting:
 
 ```nginx
 location /cms-migration {

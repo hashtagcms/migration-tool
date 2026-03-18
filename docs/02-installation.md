@@ -47,11 +47,12 @@ This will create `config/migration-tool.php`:
 
 return [
     'prefix'     => 'cms-migration',   // URL prefix for all wizard routes
-    'middleware' => ['web'],            // Middleware group applied to all routes
+    'middleware' => ['web', 'auth'],    // Middleware group applied to all routes
+    'auto_queue_work_once' => true,     // Auto-runs one queue worker on dispatch
 ];
 ```
 
-> **Tip:** Add `'auth'` to the middleware array in production to restrict access to authenticated admins.
+> **Tip:** Even if you override middleware, the controller also blocks non-Staff users (`user_type !== 'Staff'`).
 
 ---
 
@@ -89,6 +90,8 @@ php artisan queue:work --tries=1 --timeout=600
 ```
 
 > **Important:** Set `--timeout` to at least `600` seconds (10 minutes) for large sites.
+
+If `auto_queue_work_once` is enabled (default), dispatching a migration from the wizard auto-starts a one-shot worker process (`queue:work --once`) for convenience.
 
 ---
 

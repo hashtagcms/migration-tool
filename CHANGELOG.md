@@ -18,6 +18,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
 - Regression test coverage for legacy `tenants` table and `tenant_id` to `platform_id` mapping logic in migration steps.
 - Configurable auto-start of `queue:work --once` when migration is dispatched (`migration-tool.auto_queue_work_once`).
 - Controller-level access restriction so only users with `user_type = Staff` can use the migration tool.
+- Automatic provisioning of missing target tables from source schema before dispatching migration.
 
 ### Fixed
 
@@ -25,6 +26,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
 - Corrected PDO extension detection to map `mariadb` driver to `pdo_mysql`.
 - Fixed queue crash at 90% by replacing `Artisan::has()` with safe command discovery via `Artisan::all()`.
 - Updated async job error handling to catch `Throwable` so migration logs are marked `failed` for non-Exception errors.
+- Added clear user-facing error when missing target tables cannot be created due to insufficient CREATE TABLE permission.
 
 ---
 

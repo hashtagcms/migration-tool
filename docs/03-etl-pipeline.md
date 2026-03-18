@@ -1,6 +1,6 @@
 # 03 — The ETL Pipeline
 
-The core of the Migration Tool is a five-step ETL pipeline, orchestrated by `SiteMigrationService` and executed inside a Laravel background job (`ProcessMigration`).
+The core of the Migration Tool is a six-step ETL pipeline, orchestrated by `SiteMigrationService` and executed inside a Laravel background job (`ProcessMigration`).
 
 ---
 
@@ -11,9 +11,9 @@ The core of the Migration Tool is a five-step ETL pipeline, orchestrated by `Sit
 | 1 | `SyncContextStep` | Context | langs, platforms, countries, users, roles, permissions, tags, cms_modules | 25% |
 | 2 | `SyncStructuralStep` | Structural | sites, themes, site_langs, modules, site_props | 50% |
 | 3 | `SyncGlueStep` | Glue | categories, galleries, microsites, festivals, comments, subscribers | 75% |
-| 4 | `SyncContentStep` | Content | translations for all entities, pages, gallery pivots | 85% |
-| 5 | `SyncMediaStep` | Assets | physical files in `assets/` and `storage/` | 95% |
-| 6 | `SyncValidationStep` | Validation | integrity check and record count comparison | 100% |
+| 4 | `SyncContentStep` | Content | translations for all entities, pages, gallery pivots | 90% |
+| 5 | `SyncValidationStep` | Validation | integrity check and record count comparison | 90% |
+| 6 | `SyncMediaStep` | Assets | physical files in `assets/` and `storage/` | 95% |
 
 All database-heavy steps (1-4) run inside a scoped `DB::beginTransaction()`. Steps 5 and 6 run post-commit.
 
@@ -102,7 +102,7 @@ All database-heavy steps (1-4) run inside a scoped `DB::beginTransaction()`. Ste
 
 ---
 
-## Step 6 — SyncValidationStep
+## Step 5 — SyncValidationStep
 
 **Purpose:** Provide a post-migration integrity report.
 
@@ -113,7 +113,7 @@ All database-heavy steps (1-4) run inside a scoped `DB::beginTransaction()`. Ste
 
 ---
 
-## Step 5 — SyncMediaStep
+## Step 6 — SyncMediaStep
 
 **Purpose:** Copy physical asset files from the source filesystem to the target filesystem.
 

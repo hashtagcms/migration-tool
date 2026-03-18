@@ -182,6 +182,216 @@ class MigrationController extends Controller
     }
 
     /**
+     * Tables this package writes to on the target DB.
+     * Ordered to reduce FK creation issues when auto-creating missing tables.
+     *
+     * @return string[]
+     */
+    protected function managedMigrationTables(): array
+    {
+        return [
+            'langs',
+            'platforms',
+            'zones',
+            'currencies',
+            'countries',
+            'cities',
+            'hooks',
+            'roles',
+            'permissions',
+            'tags',
+            'cms_modules',
+            'users',
+            'sites',
+            'themes',
+            'modules',
+            'categories',
+            'module_props',
+            'pages',
+            'galleries',
+            'menu_managers',
+            'microsites',
+            'festivals',
+            'comments',
+            'subscribers',
+            'contacts',
+            'site_props',
+            'static_module_contents',
+            'user_profiles',
+            'cms_permissions',
+            'permission_role',
+            'role_user',
+            'country_langs',
+            'lang_site',
+            'site_langs',
+            'platform_site',
+            'currency_site',
+            'country_site',
+            'hook_site',
+            'site_zone',
+            'site_user',
+            'category_site',
+            'module_site',
+            'category_gallery',
+            'static_module_content_langs',
+            'hook_langs',
+            'category_langs',
+            'module_prop_langs',
+            'theme_langs',
+            'module_langs',
+            'menu_manager_langs',
+            'page_langs',
+            'gallery_page',
+            'gallery_tag',
+        ];
+    }
+
+    /**
+     * Resolve source schema table name for a target table.
+     */
+    protected function sourceSchemaTableForTarget(string $targetTable, array $sourceTables): ?string
+    {
+        if ($targetTable === 'platforms' && !in_array('platforms', $sourceTables, true) && in_array('tenants', $sourceTables, true)) {
+            return 'tenants';
+        }
+
+        return in_array($targetTable, $sourceTables, true) ? $targetTable : null;
+    }
+
+    /**
+     * Determine missing target tables for tables managed by this package.
+     * Returns: [target_table => source_schema_table]
+     *
+     * @return array<string,string>
+     */
+    protected function findMissingManagedTargetTables($sourceConnection): array
+    {
+        $sourceTables = $this->getTableNames($sourceConnection);
+        $targetTables = $this->getTableNames(DB::connection());
+
+        $missing = [];
+        foreach ($this->managedMigrationTables() as $targetTable) {
+            if (in_array($targetTable, $targetTables, true)) {
+                continue;
+            }
+
+            $sourceSchemaTable = $this->sourceSchemaTableForTarget($targetTable, $sourceTables);
+            if ($sourceSchemaTable) {
+                $missing[$targetTable] = $sourceSchemaTable;
+            }
+        }
+
+        return $missing;
+    }
+
+    /**
+     * Build CREATE TABLE SQL for target from source schema.
+     */
+    protected function buildCreateTableSqlFromSource($sourceConnection, string $sourceTable, string $targetTable): ?string
+    {
+        $driver = $sourceConnection->getDriverName();
+        if (!in_array($driver, ['mysql', 'mariadb'], true)) {
+            return null;
+        }
+
+        $rows = $sourceConnection->select("SHOW CREATE TABLE `{$sourceTable}`");
+        $row = (array) ($rows[0] ?? []);
+        if (empty($row)) {
+            return null;
+        }
+
+        $createTableKey = null;
+        foreach (array_keys($row) as $key) {
+            if (stripos((string) $key, 'Create Table') !== false) {
+                $createTableKey = $key;
+                break;
+            }
+        }
+
+        if (!$createTableKey || empty($row[$createTableKey])) {
+            return null;
+        }
+
+        $sql = (string) $row[$createTableKey];
+        if ($sourceTable !== $targetTable) {
+            $sql = preg_replace(
+                '/^CREATE TABLE\s+`' . preg_quote($sourceTable, '/') . '`/i',
+                'CREATE TABLE `' . $targetTable . '`',
+                $sql,
+                1
+            ) ?? $sql;
+        }
+
+        return $sql;
+    }
+
+    /**
+     * Auto-create missing target tables from source schema when possible.
+     *
+     * @return array{success:bool,created:array<int,string>,missing:array<int,string>,permission_denied:bool,message:?string}
+     */
+    protected function autoProvisionMissingTargetTables($sourceConnection): array
+    {
+        $missingMap = $this->findMissingManagedTargetTables($sourceConnection);
+        if (empty($missingMap)) {
+            return [
+                'success' => true,
+                'created' => [],
+                'missing' => [],
+                'permission_denied' => false,
+                'message' => null,
+            ];
+        }
+
+        $created = [];
+        $failed = [];
+
+        foreach ($missingMap as $targetTable => $sourceSchemaTable) {
+            try {
+                $sql = $this->buildCreateTableSqlFromSource($sourceConnection, $sourceSchemaTable, $targetTable);
+                if (!$sql) {
+                    $failed[$targetTable] = 'Unable to generate CREATE TABLE statement from source schema.';
+                    continue;
+                }
+
+                DB::statement($sql);
+                $created[] = $targetTable;
+            } catch (\Throwable $e) {
+                $failed[$targetTable] = $e->getMessage();
+            }
+        }
+
+        if (empty($failed)) {
+            return [
+                'success' => true,
+                'created' => $created,
+                'missing' => [],
+                'permission_denied' => false,
+                'message' => null,
+            ];
+        }
+
+        $permissionDenied = collect($failed)->contains(function ($error) {
+            return preg_match('/create command denied|access denied|permission/i', (string) $error) === 1;
+        });
+
+        $missingTables = array_keys($failed);
+        $tableList = implode(', ', $missingTables);
+
+        $message = $permissionDenied
+            ? "Unable to create missing target tables due to insufficient CREATE TABLE permission. Please create these tables first in target database and then run this migration tool again: {$tableList}."
+            : "Failed to auto-create some target tables. Please create these tables first in target database and then run this migration tool again: {$tableList}.";
+
+        return [
+            'success' => false,
+            'created' => $created,
+            'missing' => $missingTables,
+            'permission_denied' => $permissionDenied,
+            'message' => $message,
+        ];
+    }
+
+    /**
      * Safely count rows in a table. Returns 0 if table does not exist.
      */
     protected function safeCount($connection, string $table, array $tableNames, ?int $siteId = null): int
@@ -321,6 +531,16 @@ class MigrationController extends Controller
         $dbConfig = session('migration_source_db');
         $jobId    = (string) \Illuminate\Support\Str::uuid();
 
+        $sourceConnection = DB::connection('temp_source_connection');
+        $tableProvision = $this->autoProvisionMissingTargetTables($sourceConnection);
+        if (!$tableProvision['success']) {
+            return response()->json([
+                'success' => false,
+                'message' => $tableProvision['message'],
+                'missing_tables' => $tableProvision['missing'],
+            ], $tableProvision['permission_denied'] ? 403 : 422);
+        }
+
         // Create log entry
         DB::table('cms_migration_logs')->insert([
             'job_id' => $jobId,
@@ -347,7 +567,8 @@ class MigrationController extends Controller
         return response()->json([
             'success' => true,
             'job_id' => $jobId,
-            'message' => 'Migration started in background'
+            'message' => 'Migration started in background',
+            'auto_created_tables' => $tableProvision['created'],
         ]);
     }
 
@@ -477,6 +698,26 @@ class MigrationController extends Controller
                           : 'Run `php artisan migrate` first. The cms_migration_logs table is missing.',
             'critical' => true,
         ];
+
+        // ── 7b. Target DB — Managed Tables Availability ─────────────────────
+        try {
+            $missingTargetTables = array_keys($this->findMissingManagedTargetTables($connection));
+            $checks[] = [
+                'label'    => 'Target DB Managed Tables',
+                'status'   => empty($missingTargetTables) ? 'pass' : 'warning',
+                'message'  => empty($missingTargetTables)
+                    ? 'All managed target tables are present.'
+                    : 'Missing in target: ' . implode(', ', $missingTargetTables) . '. These will be auto-created during run if DB user has CREATE TABLE permission.',
+                'critical' => false,
+            ];
+        } catch (\Exception $e) {
+            $checks[] = [
+                'label'    => 'Target DB Managed Tables',
+                'status'   => 'warning',
+                'message'  => 'Could not verify managed target tables: ' . $e->getMessage(),
+                'critical' => false,
+            ];
+        }
 
         // ── 8. Queue Configuration ────────────────────────────────────────────
         $queueDriver  = config('queue.default', 'sync');

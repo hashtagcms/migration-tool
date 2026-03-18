@@ -20,17 +20,20 @@ A production-grade, asynchronous database, media, and template migration tool fo
 | Artisan CLI Interface (`cms:migrate-site` & `cms:migrate-templates`) | ✅ |
 | ID Mapping Engine (old_id → new_id across connections) | ✅ |
 | Asynchronous Background Job Processing & Progress Monitoring | ✅ |
+| Auto-run one queue job on dispatch (`queue:work --once`) | ✅ |
 | **Scale-ready Performance** (Chunked data processing for large sites) | ✅ |
 | Conflict Resolution: Terminate / Overwrite / Rename | ✅ |
 | Media & Asset File Synchronization | ✅ |
 | Automated Post-Migration Integrity Validation | ✅ |
+| Staff-only access guard at controller level (`user_type = Staff`) | ✅ |
+| Auto-create missing target tables from source schema (with permission checks) | ✅ |
 
 ---
 
 ## 📋 Requirements
 
 - PHP `^8.2`
-- Laravel `10.x` or `11.x`
+- Laravel `10.x`, `11.x`, or `12.x`
 - HashtagCMS core package `hashtagcms/hashtagcms`
 - A queue driver configured (e.g., `database`, `redis`, `sqs`)
 
@@ -49,10 +52,12 @@ php artisan vendor:publish --tag="migration-tool-config"
 php artisan migrate
 ```
 
-3. **Run your queue worker:**
+3. **Run your queue worker (recommended for sustained migrations):**
 ```bash
 php artisan queue:work
 ```
+
+    If `auto_queue_work_once` is enabled in config (default), each migration dispatch can auto-start a one-shot worker process.
 
 ---
 

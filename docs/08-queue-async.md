@@ -17,7 +17,7 @@ MigrationController                            │
   3. dispatch(ProcessMigration::class) ─────▶  │
   4. Returns { job_id }                         │  ProcessMigration::handle()
         │                                       │    re-hydrates DB connection
-        │                                       │    runs 5 pipeline steps
+        │                                       │    runs migration pipeline steps
         │                                       │    updates log on each step
 Wizard polls /check-progress/{id}  ◀──────────  │    final: status=completed
   every 2 seconds                               │
@@ -148,10 +148,10 @@ When enabled, the package starts a background `queue:work --once` process right 
 
 ## Error Handling
 
-If any pipeline step throws an exception:
+If any pipeline step or finalization logic throws an error/exception:
 
 1. The Laravel database transaction is rolled back (no partial data in target DB).
-2. The `cms_migration_logs` row is updated: `status = 'failed'`, `message = <exception message>`.
+2. The `cms_migration_logs` row is updated: `status = 'failed'`, `message = <error message>`.
 3. The exception is logged to Laravel's log file via `Log::error()`.
 4. The wizard UI detects `status === 'failed'` during polling and shows an alert with the error message.
 
