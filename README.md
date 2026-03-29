@@ -5,6 +5,9 @@
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Package](https://img.shields.io/badge/package-hashtagcms%2Fmigration--tool-purple)](https://github.com/hashtagcms/migration-tool)
 
+
+ ![Migration Tool](./docs/img/icon.png)
+
 A production-grade, asynchronous database, media, and template migration tool for [HashtagCMS](https://hashtagcms.org). Move a complete CMS site — including all data layers, translations, media files, and relational graph — from a **source** database to a **target** installation with a beautiful guided wizard UI.
 
 ---

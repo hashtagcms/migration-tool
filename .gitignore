@@ -1,16 +1,47 @@
 /vendor/
 /node_modules/
 
+# PHPUnit
 /.phpunit.cache/
 /.phpunit.result.cache
 /coverage/
+phpunit.xml
 
+# IDEs and Editors
 /.idea/
 /.vscode/
+*.swp
+*.swo
+.project
+.settings/
+.buildpath
 
-/.DS_Store
+# OS files
+.DS_Store
+Thumbs.db
 
+# Environment and Logs
+.env
+.env.testing
+*.log
+
+# Project specific
 /.antigravity/
+/plan/
+plan
+/docs/site/
 
+# Lock files (common for libraries to ignore to allow downstream versions)
 /composer.lock
 /package-lock.json
+
+# Laravel specific (if any local storage/cache is created)
+/storage/*.key
+/storage/framework/cache/data/*
+/storage/framework/sessions/*
+/storage/framework/testing/*
+/storage/framework/views/*.php
+/storage/logs/*.log
+/public/storage
+/public/hot
+/public/mix-manifest.json
